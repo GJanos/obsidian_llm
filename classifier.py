@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 import config
 
-MODES_FILE = Path(__file__).parent / "modes.md"
+MODES_FILE = Path(__file__).parent / "docs" / "modes.md"
 
 PATH_PARAMS = {"folder"}
 

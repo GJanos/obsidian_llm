@@ -4,7 +4,7 @@ from pathlib import Path
 import config
 
 OUTPUT_DIR = Path(__file__).parent / "output"
-USER_PROFILE_PATH = Path(__file__).parent / "user.md"
+USER_PROFILE_PATH = Path(__file__).parent / "docs" / "user.md"
 
 
 def collect_md_files(folder: str) -> list[str]:

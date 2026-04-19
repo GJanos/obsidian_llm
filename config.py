@@ -12,11 +12,13 @@ def dbg(msg: str) -> None:
         print(f"[DEBUG {ts}] {msg}")
 
 MODEL_NAME = "qwen3:14b"
-LLM_TIMEOUT = 7200          # seconds — 2 hours for slow CPU inference
-BATCH_TOKEN_LIMIT = 32_000  # tokens per batch (gemma3 128k context)
+EMBED_MODEL = "nomic-embed-text"
+SEMANTIC_RECALL_COUNT = 20      # candidates returned by vector stage to the re-ranker
+LLM_TIMEOUT = 7200              # seconds — 2 hours for slow CPU inference
+BATCH_TOKEN_LIMIT = 32_000      # tokens per batch (qwen3 context)
 BATCH_CHAR_LIMIT = BATCH_TOKEN_LIMIT * 4  # ~128,000 chars (1 token ≈ 4 chars)
 MONTHLY_BATCH_CHAR_LIMIT = 12_000  # larger context for monthly synthesis batches
-PER_FILE_YEARLY_LIMIT = 2_000  # max chars per file for yearly summary
+PER_FILE_YEARLY_LIMIT = 2_000   # max chars per file for yearly summary
 
 VAULT_PATH = os.environ.get("OBSIDIAN_LLM_VAULT_PATH")
 if not VAULT_PATH:
