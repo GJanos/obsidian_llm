@@ -33,3 +33,7 @@ Amit a végén kérünk:
 </feladat>
 
 Ha van ötleted, hogy te hogyan csinálnád ezt a kört, jöhet bátran.
+
+
+-- frontmatter needs to be cutted off from files if present!
+-- image code injections need to be cut out too

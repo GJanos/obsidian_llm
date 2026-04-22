@@ -58,8 +58,13 @@ Pushed back on `folder` being required for semantic search — defeats the purpo
 
 Re-ranking proved completely unreliable in practice — every run returned either all 0/10 or all 100/10. Pushed back and argued the embedding model already ranked Rocky I, II, III correctly at 1–3, so the LLM layer was making things worse. Replaced re-ranking with LLM synthesis: top N notes passed to qwen3:14b to directly answer the question. Filename prepended to embedded content to improve recall for notes where the key term is in the filename. Recall remains noisy over 464 journal notes with overlapping hiking/travel vocabulary.
 
-# DAY 6 — 2026-04-22
+# DAY 6 — 2026-04-21
 Rocky was a false positive — the embedding model found those notes easily because the filenames matched exactly. Glendalough exposed the real weakness: one specific event note drowned out by hundreds of daily notes with similar hiking vocabulary.
 
 Synthesis was timing out and producing verbose non-answers when the wrong notes reached it. Pushed back on Claude's suggestion to use an LLM call for keyword extraction — too slow. Agreed on a zero-latency heuristic: extract capitalised words from the query, filter out common question words, fall back to pure vector if no keywords found. Hybrid search implemented: keyword grep injects matched files into the candidate pool ranked by vector score, with guaranteed slots in the synthesis pool so keyword matches always reach the LLM regardless of cosine rank. Synthesis prompt tightened to 1–2 sentences, explicit "Not found in vault." instruction. Recall still unreliable — work in progress.
+
+# DAY 7 — 2026-04-22
+Reversed keyword extraction from Day 6. The capitalised-word heuristic failed on single-word queries ("Rocky" not capitalised mid-sentence) and returned phrases instead of individual terms. Replaced with an LLM call using Pydantic structured output — returns a validated `list[str]`, `/no_think` added to suppress reasoning overhead. Prompt broadened from "proper nouns only" to cover movie titles, place names, activities, and key nouns. Single-word constraint added explicitly after observing "Rocky movie" returned as one token — structured output alone doesn't enforce atomicity.
+
+Pre-filtering before keyword grep: drop bottom 60% by vector score first, run grep only on the surviving 40%. Fixes the hiking/travel vocabulary noise problem — correct note almost always survives the cut. Cutoff exposed as `SEMANTIC_KEEP_TOP_PCT = 0.4` in config. Boosted scoring replaces flat keyword priority: `vector_score * (1 + 0.1 * kw_hits)` so multi-keyword matches float above single-hit files without overriding the vector signal. Pool capped at `KEYWORD_MATCH_LIMIT = 5` (down from 10) to keep synthesis focused. Synthesis prompt updated to allow inference from ratings and descriptions — fixes false negatives where the answer was implied but not stated literally.
 
