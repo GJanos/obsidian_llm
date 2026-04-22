@@ -16,10 +16,10 @@ Generates a concise, structured summary of all daily notes written during a give
 
 ## semantic_search
 
-Searches all Markdown notes in the vault for content semantically related to a query. Each file is scored by the LLM for relevance and the top results are returned with file path and a representative excerpt. Output is written to `output/semantic_search_<timestamp>.md`.
+Searches all personal Markdown notes in the vault for content semantically related to the user's question or topic. Use this mode whenever the user wants to find, recall, or look up something from their notes — e.g. "what did I think about X", "find my notes on Y", "which movies did I watch", "did I write anything about Z". The `query` parameter is always the user's original request verbatim. Output is written to `output/semantic_search_<timestamp>.md`.
 
 **Required Parameters**
-- `query` (string): The topic or question to search for.
+- `query` (string): The user's request, copied verbatim.
 
 **Optional Parameters**
 - `folder` (string): Path to search (absolute or relative to vault root). Defaults to the full vault.

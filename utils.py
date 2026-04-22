@@ -43,4 +43,4 @@ def write_output(filename: str, content: str) -> None:
     out_path = OUTPUT_DIR / filename
     out_path.write_text(content, encoding="utf-8")
     print(content)
-    print(f"\n[LAIWM] Output written to {out_path}")
+    config.log(f"Output written to {out_path}")

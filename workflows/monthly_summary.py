@@ -97,7 +97,7 @@ def run(year: int, month: int) -> None:
     month_label = f"{_MONTH_NAMES[month]} {year}"
     notes = _collect_notes(year, month)
     if not notes:
-        print(f"[LAIWM] No notes found for {month_label}")
+        config.log(f" No notes found for {month_label}")
         return
 
     user_profile = read_user_profile()
@@ -105,7 +105,7 @@ def run(year: int, month: int) -> None:
 
     # Pass 1: condense each day independently
     n = len(notes)
-    print(f"[LAIWM] {n} notes → pre-summarizing...")
+    config.log(f" {n} notes → pre-summarizing...")
     day_summaries: list[str] = []
     for idx, path in enumerate(notes, 1):
         stem = Path(path).stem
@@ -118,7 +118,7 @@ def run(year: int, month: int) -> None:
     batches = _make_batches(day_summaries, effective_limit)
     n_batches = len(batches)
     config.dbg(f"Synthesis: {len(day_summaries)} day summaries → {n_batches} batch(es), limit={effective_limit} chars")
-    print(f"[LAIWM] Synthesizing {n_batches} batch(es)...")
+    config.log(f" Synthesizing {n_batches} batch(es)...")
 
     previous_summaries: list[str] = []
     for idx, batch in enumerate(batches, 1):
@@ -129,11 +129,11 @@ def run(year: int, month: int) -> None:
         print("done")
 
     # Pass 3: final consolidation
-    print("[LAIWM] Final consolidation ...", end=" ", flush=True)
+    config.log(" Final consolidation ...", end=" ", flush=True)
     final = _consolidate(previous_summaries, user_context, month_label)
     print("done")
 
     out_path = OUTPUT_DIR / f"monthly_summary_{year}_{month:02d}.md"
     OUTPUT_DIR.mkdir(exist_ok=True)
     out_path.write_text(f"# Monthly Summary: {month_label}\n\n{final}\n", encoding="utf-8")
-    print(f"[LAIWM] Output written to {out_path}")
+    config.log(f" Output written to {out_path}")

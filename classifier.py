@@ -55,7 +55,7 @@ def classify(user_prompt: str) -> RoutingResult:
 def collect_missing_params(missing: list[str], params: dict) -> dict:
     if not missing:
         return params
-    print("[LAIWM] Some information is needed:\n")
+    config.log("Some information is needed:\n")
     try:
         for name in missing:
             desc = PARAM_DESCRIPTIONS.get(name, name)
@@ -66,7 +66,7 @@ def collect_missing_params(missing: list[str], params: dict) -> dict:
                 value = value.lower() in ("true", "yes", "1")
             params[name] = value
     except KeyboardInterrupt:
-        print("\n[LAIWM] Cancelled.")
+        config.log("Cancelled.")
         sys.exit(0)
     return params
 
@@ -75,4 +75,21 @@ def prepend_vault_path(params: dict) -> dict:
     for key in PATH_PARAMS:
         if key in params and params[key]:
             params[key] = os.path.join(config.VAULT_PATH, params[key])
+    return params
+
+
+def resolve(routing: RoutingResult, user_prompt: str) -> dict:
+    params = routing.params
+
+    if not params.get("query"):
+        params["query"] = user_prompt
+    routing.missing = [p for p in routing.missing if p != "query"]
+
+    for key in PATH_PARAMS:
+        if key in routing.missing and key not in params:
+            params[key] = ""
+    missing = [p for p in routing.missing if p not in PATH_PARAMS]
+
+    params = collect_missing_params(missing, params)
+    params = prepend_vault_path(params)
     return params

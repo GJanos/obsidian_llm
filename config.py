@@ -6,6 +6,11 @@ import ollama
 DEBUG: bool = False
 
 
+def log(msg: str) -> None:
+    ts = datetime.now().strftime("%H:%M:%S")
+    print(f"[LAIWM {ts}] {msg}")
+
+
 def dbg(msg: str) -> None:
     if DEBUG:
         ts = datetime.now().strftime("%H:%M:%S")
@@ -13,7 +18,9 @@ def dbg(msg: str) -> None:
 
 MODEL_NAME = "qwen3:14b"
 EMBED_MODEL = "nomic-embed-text"
-SEMANTIC_RECALL_COUNT = 20      # candidates returned by vector stage to the re-ranker
+SEMANTIC_RECALL_COUNT = 50      # notes retrieved by vector stage
+SEMANTIC_SYNTHESIS_COUNT = 5    # top N notes passed to LLM for answer synthesis
+KEYWORD_MATCH_LIMIT = 10        # max keyword-matched files injected into candidate pool
 LLM_TIMEOUT = 7200              # seconds — 2 hours for slow CPU inference
 BATCH_TOKEN_LIMIT = 32_000      # tokens per batch (qwen3 context)
 BATCH_CHAR_LIMIT = BATCH_TOKEN_LIMIT * 4  # ~128,000 chars (1 token ≈ 4 chars)

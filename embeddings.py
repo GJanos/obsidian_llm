@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 
 import config
+
 from utils import OUTPUT_DIR
 
 _CACHE_PATH = OUTPUT_DIR / "embeddings_cache.json"
@@ -32,12 +33,13 @@ def update_cache(files: list[str]) -> dict:
         mtime = Path(path).stat().st_mtime
         if path in cache and cache[path]["mtime"] == mtime:
             continue
-        text = Path(path).read_text(encoding="utf-8", errors="replace")
-        cache[path] = {"mtime": mtime, "vector": embed_text(text)}
+        stem = Path(path).stem
+        content = Path(path).read_text(encoding="utf-8", errors="replace")
+        cache[path] = {"mtime": mtime, "vector": embed_text(f"{stem}\n{content}")}
         changed += 1
     if changed:
         save_cache(cache)
-        print(f"[LAIWM] Embedded {changed} new/changed notes.")
+        config.log(f"Embedded {changed} new/changed notes.")
     return cache
 
 

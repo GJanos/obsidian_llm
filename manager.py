@@ -7,6 +7,7 @@ import argparse
 import sys
 
 import config
+from config import log
 import classifier
 from workflows import run_workflow
 
@@ -26,29 +27,23 @@ def main() -> None:
     if args.debug:
         config.DEBUG = True
 
-    print("[LAIWM] Classifying request...")
+    log(" Classifying request...")
 
     try:
         routing = classifier.classify(args.prompt)
     except Exception as e:
-        print(f"[LAIWM] Failed to classify request: {e}")
+        log(f" Failed to classify request: {e}")
         sys.exit(1)
 
     config.dbg(f"Routing result: mode={routing.mode} confidence={routing.confidence:.0%} params={routing.params} missing={routing.missing}")
 
     if not routing.mode or routing.confidence < 0.4:
-        print(f"[LAIWM] Could not confidently match your request to a workflow (confidence: {routing.confidence:.0%}).")
+        log(f" Could not confidently match your request to a workflow (confidence: {routing.confidence:.0%}).")
         sys.exit(1)
 
-    print(f"[LAIWM] Mode: {routing.mode} (confidence: {routing.confidence:.0%})")
+    log(f" Mode: {routing.mode} (confidence: {routing.confidence:.0%})")
 
-    missing = [p for p in routing.missing if p not in classifier.PATH_PARAMS]
-    for key in classifier.PATH_PARAMS:
-        if key in routing.missing and key not in routing.params:
-            routing.params[key] = ""
-
-    params = classifier.collect_missing_params(missing, routing.params)
-    params = classifier.prepend_vault_path(params)
+    params = classifier.resolve(routing, args.prompt)
     config.dbg(f"Final params: {params}")
 
     run_workflow(routing.mode, params)
