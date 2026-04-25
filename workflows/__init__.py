@@ -1,7 +1,7 @@
 import sys
 
 import config
-from workflows import monthly_summary, semantic_search
+from . import monthly_summary, semantic_search
 
 WORKFLOWS = {
     "semantic_search": lambda p: semantic_search.run(

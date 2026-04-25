@@ -7,6 +7,17 @@ OUTPUT_DIR = Path(__file__).parent / "output"
 USER_PROFILE_PATH = Path(__file__).parent / "docs" / "user.md"
 
 
+def _strip_noise(text: str) -> str:
+    text = re.sub(r'<img\b[^>]*/?>(?:\s*<br\s*/?>)?', '', text)
+    text = re.sub(r'```mapview.*?```', '', text, flags=re.DOTALL)
+    return text.strip()
+
+
+def clean_content(text: str) -> str:
+    text = re.sub(r'^---\n.*?\n---\n?', '', text, count=1, flags=re.DOTALL)
+    return _strip_noise(text)
+
+
 def collect_md_files(folder: str) -> list[str]:
     base = Path(folder)
     if not base.exists():
@@ -18,7 +29,7 @@ def collect_md_files(folder: str) -> list[str]:
 
 
 def read_file(path: str) -> str:
-    return Path(path).read_text(encoding="utf-8", errors="replace")
+    return _strip_noise(Path(path).read_text(encoding="utf-8", errors="replace"))
 
 
 def query_llm(prompt: str) -> str:

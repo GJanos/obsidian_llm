@@ -5,7 +5,7 @@ import numpy as np
 
 import config
 
-from utils import OUTPUT_DIR
+from utils import OUTPUT_DIR, clean_content
 
 _CACHE_PATH = OUTPUT_DIR / "embeddings_cache.json"
 
@@ -34,7 +34,7 @@ def update_cache(files: list[str]) -> dict:
         if path in cache and cache[path]["mtime"] == mtime:
             continue
         stem = Path(path).stem
-        content = Path(path).read_text(encoding="utf-8", errors="replace")
+        content = clean_content(Path(path).read_text(encoding="utf-8", errors="replace"))
         cache[path] = {"mtime": mtime, "vector": embed_text(f"{stem}\n{content}")}
         changed += 1
     if changed:
