@@ -57,3 +57,14 @@ Circular import in `workflows/__init__.py` — `from workflows import` was resol
 Keyword extraction debate. Model returned only `['Rocky']` for "Which Rocky movie was my favorite?" — too narrow. Argued for extracting "movie" as well. Settled on a clear rule: extract content words (titles, places, names, activities, nouns), exclude sentiment and relational words ("favorite", "best", "worst") since they match too many unrelated notes and dilute the boosting signal. Debug logs added showing the first 100 chars of each pool file so the synthesis input is visible without running blind.
 
 Presummary step added — question-focused LLM call per note before synthesis, same pattern as monthly_summary Pass 1. First attempt included a "No relevant information" escape hatch. Model used it for all 5 notes — because no Rocky note explicitly states "this is my favorite", it decided nothing was relevant. Pushed back, rewrote the prompt to always produce a summary (rating, recommendation, opinion, description) with no exit option. Rocky I surfaced as the favorite from the ratings comparison. Finally working.
+
+# DAY 9 — 2026-04-26
+Project polishing and finalisation for presentation. Docstrings added to all public and level-1 private functions across the codebase.
+
+Bug caught in `monthly_summary.py`: `config.log(..., end=..., flush=True)` — `log()` doesn't accept those kwargs, raises `TypeError` on every Pass 3 run. Had gone unnoticed. Four dead config constants removed — leftovers from deleted workflows never referenced anywhere.
+
+`_keyword_matches()` was reading each matched file twice: once to find matches, again to count hits. Merged into a single `_keyword_hits()` pass returning `{path: hit_count}`.
+
+Startup banner and `_check_connection()` added — model and host printed on every run, friendly error if Ollama is unreachable. `.gitignore` fixed: `todo.md` and `docs/user.md` were both unprotected.
+
+README written from scratch — motivation, hardware journey, model progression, both workflow pipelines as flow diagrams, real debug output example2.
