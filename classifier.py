@@ -42,6 +42,7 @@ class RoutingResult(BaseModel):
 
 
 def classify(user_prompt: str) -> RoutingResult:
+    """Ask the LLM to match the prompt to a workflow mode and extract its parameters."""
     modes_doc = MODES_FILE.read_text(encoding="utf-8")
     prompt = _CLASSIFICATION_PROMPT.format(modes_doc=modes_doc, user_prompt=user_prompt)
     result = config.client.chat(
@@ -53,6 +54,7 @@ def classify(user_prompt: str) -> RoutingResult:
 
 
 def collect_missing_params(missing: list[str], params: dict) -> dict:
+    """Interactively prompt the user for any parameters the LLM could not extract from the request."""
     if not missing:
         return params
     config.log("Some information is needed:\n")
@@ -72,6 +74,7 @@ def collect_missing_params(missing: list[str], params: dict) -> dict:
 
 
 def prepend_vault_path(params: dict) -> dict:
+    """Expand relative folder params to absolute paths under VAULT_PATH."""
     for key in PATH_PARAMS:
         if key in params and params[key]:
             params[key] = os.path.join(config.VAULT_PATH, params[key])
@@ -79,6 +82,7 @@ def prepend_vault_path(params: dict) -> dict:
 
 
 def resolve(routing: RoutingResult, user_prompt: str) -> dict:
+    """Complete params: default query to the raw prompt, silently fill missing path params, then collect any remaining required values."""
     params = routing.params
 
     if not params.get("query"):

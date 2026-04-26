@@ -4,29 +4,32 @@ from pathlib import Path
 import numpy as np
 
 import config
-
 from utils import OUTPUT_DIR, clean_content
 
 _CACHE_PATH = OUTPUT_DIR / "embeddings_cache.json"
 
 
 def embed_text(text: str) -> list[float]:
+    """Embed a string via the configured embedding model and return the vector."""
     response = config.client.embeddings(model=config.EMBED_MODEL, prompt=text)
     return response.embedding
 
 
 def load_cache() -> dict:
+    """Load the on-disk embedding cache; returns an empty dict if none exists yet."""
     if _CACHE_PATH.exists():
         return json.loads(_CACHE_PATH.read_text(encoding="utf-8"))
     return {}
 
 
 def save_cache(cache: dict) -> None:
+    """Persist the embedding cache to disk, creating the output directory if needed."""
     OUTPUT_DIR.mkdir(exist_ok=True)
     _CACHE_PATH.write_text(json.dumps(cache), encoding="utf-8")
 
 
 def update_cache(files: list[str]) -> dict:
+    """Re-embed any files whose mtime has changed since the last run; skip unchanged files."""
     cache = load_cache()
     changed = 0
     for path in files:
@@ -44,6 +47,7 @@ def update_cache(files: list[str]) -> dict:
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
+    """Cosine similarity between two vectors; returns 0.0 if either vector has zero magnitude."""
     va, vb = np.array(a), np.array(b)
     denom = np.linalg.norm(va) * np.linalg.norm(vb)
     if denom == 0:

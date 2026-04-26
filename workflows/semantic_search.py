@@ -43,6 +43,7 @@ Summaries:
 
 
 def _extract_keywords(query: str) -> list[str]:
+    """Extract concrete single-word search terms from the query via structured LLM output."""
     result = config.client.chat(
         model=config.MODEL_NAME,
         messages=[{"role": "user", "content": _KEYWORD_PROMPT.format(query=query)}],
@@ -51,20 +52,23 @@ def _extract_keywords(query: str) -> list[str]:
     return _Keywords.model_validate_json(result.message.content).keywords
 
 
-def _keyword_matches(keywords: list[str], files: list[str]) -> set[str]:
-    matched = set()
+def _keyword_hits(keywords: list[str], files: list[str]) -> dict[str, int]:
+    """Grep each file once for all keywords; return {path: hit_count} for matched files only."""
+    hits = {}
     for path in files:
         try:
             stem = Path(path).stem.lower()
             content = Path(path).read_text(encoding="utf-8", errors="replace").lower()
-            if any(kw.lower() in stem or kw.lower() in content for kw in keywords):
-                matched.add(path)
+            count = sum(1 for kw in keywords if kw.lower() in stem or kw.lower() in content)
+            if count > 0:
+                hits[path] = count
         except Exception:
             pass
-    return matched
+    return hits
 
 
 def _score_all(files: list[str], query: str) -> list[tuple[float, str]]:
+    """Embed all files (mtime-cached), embed the query, and return a cosine-ranked list."""
     cache = embeddings.update_cache(files)
     query_vec = embeddings.embed_text(query)
     scored = [
@@ -76,6 +80,7 @@ def _score_all(files: list[str], query: str) -> list[tuple[float, str]]:
 
 
 def _presummary(path: str, query: str) -> str:
+    """Summarize one note with the question in mind; always produces output — no escape hatch."""
     content = read_file(path)[:2000]
     prompt = _PRESUMMARY_PROMPT.format(query=query, filename=Path(path).name, content=content)
     response = config.client.chat(
@@ -89,6 +94,7 @@ def _presummary(path: str, query: str) -> str:
 
 
 def _synthesize(pool: list[tuple[float, str]], query: str) -> str:
+    """Pre-summarize each pool note with the question in mind, then synthesize a final answer."""
     summaries = [
         f"[{Path(path).name}]\n{_presummary(path, query)}"
         for _, path in pool
@@ -104,6 +110,7 @@ def _synthesize(pool: list[tuple[float, str]], query: str) -> str:
 
 
 def run(folder: str, query: str, max_results: int = config.SEMANTIC_SYNTHESIS_COUNT) -> None:
+    """Full pipeline: score all notes → keep top 40% → keyword boost → presummary × N → synthesize answer."""
     search_root = folder if folder else config.VAULT_PATH
     files = collect_md_files(search_root)
     if not files:
@@ -121,19 +128,13 @@ def run(folder: str, query: str, max_results: int = config.SEMANTIC_SYNTHESIS_CO
     dbg(f"Extracted keywords: {keywords}")
 
     if keywords:
-        kw_paths = _keyword_matches(keywords, top_files)
-        dbg(f"Keyword matches: {len(kw_paths)} files")
+        hits_map = _keyword_hits(keywords, top_files)
+        dbg(f"Keyword matches: {len(hits_map)} files")
         score_map = {path: score for score, path in all_scored}
-        boosted = []
-        for path in kw_paths:
-            vec = score_map.get(path, 0.0)
-            stem = Path(path).stem.lower()
-            try:
-                content = Path(path).read_text(encoding="utf-8", errors="replace").lower()
-            except Exception:
-                content = ""
-            kw_hits = sum(1 for kw in keywords if kw.lower() in stem or kw.lower() in content)
-            boosted.append((vec * (1 + 0.1 * kw_hits), path))
+        boosted = [
+            (score_map.get(path, 0.0) * (1 + 0.1 * hits), path)
+            for path, hits in hits_map.items()
+        ]
         pool = sorted(boosted, reverse=True)[:config.KEYWORD_MATCH_LIMIT]
     else:
         dbg("No keywords found — falling back to pure vector")

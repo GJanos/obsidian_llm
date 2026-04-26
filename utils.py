@@ -8,17 +8,20 @@ USER_PROFILE_PATH = Path(__file__).parent / "docs" / "user.md"
 
 
 def _strip_noise(text: str) -> str:
+    """Remove <img> tags and mapview blocks; preserve frontmatter so ratings and metadata reach the LLM."""
     text = re.sub(r'<img\b[^>]*/?>(?:\s*<br\s*/?>)?', '', text)
     text = re.sub(r'```mapview.*?```', '', text, flags=re.DOTALL)
     return text.strip()
 
 
 def clean_content(text: str) -> str:
+    """Full strip: frontmatter + noise. Used only for embeddings — raw YAML fields degrade vector quality."""
     text = re.sub(r'^---\n.*?\n---\n?', '', text, count=1, flags=re.DOTALL)
     return _strip_noise(text)
 
 
 def collect_md_files(folder: str) -> list[str]:
+    """Recursively collect all .md files under folder, excluding *-summary output files."""
     base = Path(folder)
     if not base.exists():
         raise FileNotFoundError(f"Folder not found: {folder}")
@@ -29,10 +32,12 @@ def collect_md_files(folder: str) -> list[str]:
 
 
 def read_file(path: str) -> str:
+    """Read a note, stripping visual noise but keeping frontmatter (which contains ratings and metadata)."""
     return _strip_noise(Path(path).read_text(encoding="utf-8", errors="replace"))
 
 
 def query_llm(prompt: str) -> str:
+    """Send a single prompt to the LLM and return the response with <think> blocks removed."""
     response = config.client.chat(
         model=config.MODEL_NAME,
         messages=[{"role": "user", "content": prompt}]
@@ -44,12 +49,14 @@ def query_llm(prompt: str) -> str:
 
 
 def read_user_profile() -> str:
+    """Load user.md if it exists; returns an empty string silently if the file is missing."""
     if USER_PROFILE_PATH.exists():
         return USER_PROFILE_PATH.read_text(encoding="utf-8")
     return ""
 
 
 def write_output(filename: str, content: str) -> None:
+    """Write content to the output directory and print it to stdout."""
     OUTPUT_DIR.mkdir(exist_ok=True)
     out_path = OUTPUT_DIR / filename
     out_path.write_text(content, encoding="utf-8")

@@ -11,3 +11,5 @@ wheels/
 .vscode
 output/
 .todo
+todo.md
+docs/user.md

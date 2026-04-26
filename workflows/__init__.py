@@ -14,6 +14,7 @@ WORKFLOWS = {
 
 
 def run_workflow(mode: str, params: dict) -> None:
+    """Look up the workflow for the given mode name and execute it with the resolved params."""
     if mode not in WORKFLOWS:
         config.log(f"Unknown mode: {mode}. Available: {', '.join(WORKFLOWS)}")
         sys.exit(1)

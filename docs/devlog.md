@@ -12,40 +12,21 @@
 - Verified API returns valid response via file-based curl
 
 # DAY 2 — 2026-03-22
-- Initialized project structure: `config.py`, `manager.py`, `executor.py`, `modes.md`
-- `config.py`: dynamic Windows host IP via `ip route show`, `VAULT_PATH` from `$OBSIDIAN_LLM_VAULT_PATH` env var
-- `manager.py`: CLI `--prompt` entry point, LLM classifies intent against `modes.md` using Pydantic structured output (`response_format=RoutingResult`), asks user for missing params interactively, prepends `VAULT_PATH` to all path params
-- `executor.py`: `monthly_summary` workflow — reads notes from `VAULT_PATH/Days/<year>/<MM-Month>/`, batches files to fit within KV cache limits, queries LLM per batch, appends results to output file
-- Replaced manual JSON parsing (`extract_json_from_response`) with Pydantic `BaseModel` + lmstudio `response_format` structured output throughout
-- Added `pydantic` dependency via `uv add pydantic`
-- `.vscode/launch.json`: added `LAIWM: manager.py` debug config with `${input:prompt}` popup and `OBSIDIAN_LLM_VAULT_PATH` env var baked in
-- **Bug**: LLM injected junk path segments ("my", "vault root") into `folder` param → fixed by building the notes path directly from `config.VAULT_PATH` in executor, ignoring `folder` entirely for `monthly_summary`
-- **Bug**: `prepend_vault_path` crashed on `None` folder value → guarded with `if key in params and params[key]`
-- **Bug**: model crashed (exit code `18446744072635812000`) on full 22-note context → root cause: GPU VRAM (~1.35 GB free after model weights) limits KV cache to ~9,400 tokens despite 32768 context window → set `BATCH_TOKEN_LIMIT = 7_000` (~28k chars), notes split into batches automatically
-- Switched to CPU-only inference in LMStudio for stability (slower but no OOM crashes)
-- `<think>` blocks stripped from all LLM output via regex in `_query_llm`
-- `user.md` profile injected into every batch prompt; its char count subtracted from `BATCH_CHAR_LIMIT` to avoid overflow
-- Prompt rewritten: first-person tone, uses name "János", lists events/habits concisely, ends with 2-3 sentence summary
-- `lms.set_sync_api_timeout(3600)` — 1 hour timeout for slow CPU inference
+Project scaffolded: `config.py` (dynamic Windows host IP, `VAULT_PATH` from env), `manager.py` (CLI `--prompt` → LLM intent routing via Pydantic structured output), `executor.py` (monthly_summary batch pipeline reading `VAULT_PATH/Days/`). Pydantic `BaseModel` + `response_format` replaced all manual JSON parsing throughout.
+
+Three bugs hit in sequence: LLM injected junk strings ("my", "vault root") into path params — fixed by building the notes path directly from `config.VAULT_PATH`, ignoring `folder` entirely; `prepend_vault_path` crashed on `None` folder — guarded; model OOM-crashed on full 22-note context (exit code `18446744072635812000`) — root cause was GPU KV cache limit (~9,400 tokens), fixed with `BATCH_TOKEN_LIMIT = 7_000`. `<think>` blocks stripped from all output. `user.md` profile injected into every batch prompt. 1-hour timeout set.
 
 # DAY 3 — 2026-03-24
-Replaced LM Studio entirely with Ollama + IPEX-LLM. Root cause for the switch: LM Studio's Vulkan runtime crashes on Intel Arc iGPU mid-inference (after ~4 batches), and CPU-only mode was taking 2 hours to process 30 notes. IPEX-LLM gives Ollama a proper Intel GPU backend via SYCL/oneAPI instead of Vulkan — stable, fast, and the 1.7b model on iGPU now responds in seconds.
-Setup required on Windows side: Miniforge + conda env llm, ipex-llm[xpu_2.6] and ipex-llm[cpp] installed, init-ollama.bat run as admin to swap in the GPU-patched Ollama binary. Server startup sequence: OLLAMA_NUM_GPU=999, ZES_ENABLE_SYSMAN=1, SYCL_CACHE_PERSISTENT=1, OLLAMA_HOST=0.0.0.0 (critical — without this Ollama binds only to 127.0.0.1 and is unreachable from WSL2), then ollama serve. Saved as start-ollama.bat.
-Code changes: Swapped lmstudio SDK for ollama SDK. Model changed to qwen3:1.7b, port 1234 → 11434. All LLM call sites updated to client.chat(model, messages) / response.message.content pattern. Structured output calls now use format=Model.model_json_schema() + model_validate_json() in both manager.py and executor.py. All magic numbers (BATCH_TOKEN_LIMIT, BATCH_CHAR_LIMIT, LLM_TIMEOUT, PER_FILE_YEARLY_LIMIT) moved to config.py. Fixed duplicate /no_think line in monthly summary prompt, MAX_CONTEXT_CHARS undefined reference, unused variables and imports.
-Monthly summary UX: Console now prints only date range + bullet points — batch processing noise suppressed. Previous batch summaries fed into next prompt to prevent repetition across batches.
+LM Studio dropped — Vulkan runtime crashed on Intel Arc after ~4 batches, CPU-only took 2 hours per run. Switched to Ollama + IPEX-LLM for a proper Intel GPU backend via SYCL/oneAPI. Setup: Miniforge + conda env, `ipex-llm[xpu_2.6]`, `init-ollama.bat` to swap in the GPU-patched binary. Critical: `OLLAMA_HOST=0.0.0.0` required — without it Ollama binds to 127.0.0.1 and is unreachable from WSL2.
+
+Code: swapped lmstudio SDK for ollama SDK, model → qwen3:1.7b, port 1234 → 11434. Structured output switched to `format=Model.model_json_schema()` + `model_validate_json()`. All magic numbers moved to `config.py`. Monthly summary console cleaned up; previous batch summaries fed into next prompt to prevent repetition.
 
 # DAY 4 — 2026-03-27
-Switched model from qwen3:1.7b to qwen3:8b. With the IPEX-LLM iGPU backend the 8b model is faster than LM Studio's 4b was on CPU-only, and noticeably smarter — better routing decisions and more coherent summaries. RAM pressure is manageable since the iGPU shares system memory and IPEX-LLM handles offloading efficiently.
+Model → qwen3:8b. Faster than LM Studio's 4b on CPU despite being larger, noticeably smarter.
 
-Monthly summary output quality overhaul. The core problem was that the model completely ignored prompt instructions and produced long opinionated essays with headers, emojis, intro/outro paragraphs, and follow-up questions. Three changes in combination fixed it: (1) sandwich prompting — rules stated before the notes and repeated as a reminder after, (2) `MONTHLY_BATCH_CHAR_LIMIT = 4_000` to force smaller synthesis batches so the model has less context to get confused by, (3) explicit DO NOT rules covering every failure mode observed (no intro, no outro, no headers, no emojis, no opinions, no questions). `user.md` updated with a Summary Preferences section so the user profile itself also reinforces these constraints.
+Monthly summary quality was bad — model ignored all instructions and wrote opinionated essays with headers and emojis. Three changes fixed it together: sandwich prompting (rules before and after the notes), `MONTHLY_BATCH_CHAR_LIMIT = 4_000` to shrink per-batch context, and explicit DO NOT rules for every observed failure mode. Three-pass pipeline added: Pass 1 summarizes each note independently, Pass 2 batches the condensed summaries, Pass 3 distills to 15 bullets max. Prevents detail loss from early notes that plagued single-pass batching.
 
-Three-pass summarization pipeline. Previous single-pass batching lost detail from early notes as context grew. New pipeline: Pass 1 — each daily note summarized independently to 1–3 bullets (focused, no dilution); Pass 2 — condensed day summaries batched and synthesized (entire month typically fits in one batch now, ~6k chars vs ~30k for raw notes); Pass 3 — final consolidation pass distills all batch outputs to max 15 key bullets. Quality improved significantly at the cost of ~29 extra LLM calls for Pass 1, acceptable given iGPU speed. `-summary` ending files excluded from `collect_md_files` to prevent feeding prior output back into new runs.
-
-`--debug` CLI flag added. Sets `config.DEBUG = True`, enabling `config.dbg()` calls throughout the pipeline. Logs: routing result (mode, confidence, extracted params, missing params), resolved final params, and each LLM response (length + first 200 chars). Prompt content intentionally excluded from debug output to keep it readable.
-
-**Hardware research — NPU vs iGPU**: Intel AI Boost NPU (Intel Core Ultra built-in) investigated as a second inference device. Verdict: NPU is 3–5x more energy-efficient and suited for background/always-on tasks, but has very limited SRAM (~48MB) and is too slow for large models. Staying with iGPU.
-
-Project restructured for maintainability. `executor.py` dissolved: each workflow extracted to its own file under a new `workflows/` package (`monthly_summary.py`, `semantic_search.py`). `workflows/__init__.py` owns the dispatch table and `run_workflow()`. Shared utilities (`query_llm`, `read_file`, `collect_md_files`, `write_output`, `read_user_profile`, `OUTPUT_DIR`) moved to `utils.py` at the project root, breaking the circular import that arose when `monthly_summary` was first extracted. Import chain is now clean: `manager → workflows → utils + config`.
+`--debug` flag added. `executor.py` dissolved — each workflow extracted to `workflows/` package. Shared utilities moved to `utils.py`, breaking the circular import. NPU investigated as second inference device; too slow and too little SRAM for these models. Staying with iGPU.
 
 # DAY 5 — 2026-04-19
 Upgraded model to qwen3:14b. Tried gemma3:12b first — crashes mid-inference on IPEX-LLM, SYCL backend doesn't fully support its architecture yet. qwen3:14b is a significant intelligence step up from 8b with no compatibility risk.
@@ -68,3 +49,11 @@ Reversed keyword extraction from Day 6. The capitalised-word heuristic failed on
 
 Pre-filtering before keyword grep: drop bottom 60% by vector score first, run grep only on the surviving 40%. Fixes the hiking/travel vocabulary noise problem — correct note almost always survives the cut. Cutoff exposed as `SEMANTIC_KEEP_TOP_PCT = 0.4` in config. Boosted scoring replaces flat keyword priority: `vector_score * (1 + 0.1 * kw_hits)` so multi-keyword matches float above single-hit files without overriding the vector signal. Pool capped at `KEYWORD_MATCH_LIMIT = 5` (down from 10) to keep synthesis focused. Synthesis prompt updated to allow inference from ratings and descriptions — fixes false negatives where the answer was implied but not stated literally.
 
+# DAY 8 — 2026-04-25
+Content cleaning added to strip visual noise from notes before processing: YAML frontmatter, `<img>` tags, and mapview code blocks. Immediately hit a self-inflicted problem — stripping frontmatter also stripped `rating: 8.5`, which is exactly the data the LLM needs to answer "which Rocky was your favorite?" Walked right into it. Split into two functions: `_strip_noise()` (img/mapview only) used by `read_file()` for synthesis, and `clean_content()` (full strip including frontmatter) used only by the embedding pipeline where YAML noise hurts vector quality.
+
+Circular import in `workflows/__init__.py` — `from workflows import` was resolving to itself instead of the submodules. Fixed with relative import `from . import`. Turned out `semantic_search.py` had gone missing from `workflows/` entirely during the session, which was the real cause.
+
+Keyword extraction debate. Model returned only `['Rocky']` for "Which Rocky movie was my favorite?" — too narrow. Argued for extracting "movie" as well. Settled on a clear rule: extract content words (titles, places, names, activities, nouns), exclude sentiment and relational words ("favorite", "best", "worst") since they match too many unrelated notes and dilute the boosting signal. Debug logs added showing the first 100 chars of each pool file so the synthesis input is visible without running blind.
+
+Presummary step added — question-focused LLM call per note before synthesis, same pattern as monthly_summary Pass 1. First attempt included a "No relevant information" escape hatch. Model used it for all 5 notes — because no Rocky note explicitly states "this is my favorite", it decided nothing was relevant. Pushed back, rewrote the prompt to always produce a summary (rating, recommendation, opinion, description) with no exit option. Rocky I surfaced as the favorite from the ratings comparison. Finally working.
